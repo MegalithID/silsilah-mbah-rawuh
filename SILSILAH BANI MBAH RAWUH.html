@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Silsilah Bani Mbah Rawuh</title>
+<style>
+body { font-family: Arial, sans-serif; background:#d0f0c0; margin:0; padding:0; }
+h1 { text-align:center; background:#4caf50; color:white; padding:20px; margin:0; }
+ul { list-style:none; padding-left:25px; }
+li { margin:6px 0; position:relative; cursor:pointer; }
+.node { display:inline-block; padding:6px 12px; border-radius:6px; background:#a8e6a3; transition:0.3s; }
+.node:hover { background:#66bb6a; color:white; transform: scale(1.05); }
+.hidden { display:none; }
+button { cursor:pointer; margin:2px; }
+
+/* Modal */
+.modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background:rgba(0,0,0,0.6);}
+.modal-content { background:white; margin:5% auto; padding:20px; border-radius:10px; width:90%; max-width:500px; text-align:center; }
+.close { float:right; font-size:24px; font-weight:bold; cursor:pointer; color:#333; }
+.close:hover { color:red; }
+.modal img { max-width:150px; border-radius:50%; margin-bottom:15px; }
+.modal a { color:#3498db; text-decoration:none; }
+
+#adminPanel { display:none; margin:10px 20px; padding:10px; background:#e8f5e9; border-radius:8px; }
+#adminPanel input, #adminPanel button { margin:4px 0; padding:6px; }
+
+#loginContainer { text-align:center; margin:20px; }
+#loginContainer input, #loginContainer select, #loginContainer button { margin:4px 5px; padding:6px; }
+
+#treeContainer { display:none; padding:20px; }
+#nodeSelectContainer { text-align:center; display:none; margin:10px; }
+</style>
+</head>
+<body>
+
+<h1>Silsilah Bani Mbah Rawuh</h1>
+
+<!-- Login -->
+<div id="loginContainer">
+  <select id="loginType">
+    <option value="">-- Pilih Login --</option>
+    <option value="admin">Admin</option>
+    <option value="anggota">Anggota Keluarga</option>
+  </select>
+  <input type="text" id="memberNo" placeholder="Nomor Anggota" style="display:none;">
+  <input type="password" id="loginPassword" placeholder="Password">
+  <button id="loginBtn">Login</button>
+  <p id="loginError" style="color:red; display:none;">Login gagal!</p>
+</div>
+
+<!-- Dropdown anggota memilih A/B/C/D -->
+<div id="nodeSelectContainer">
+  <label>Pilih Anggota: </label>
+  <select id="showNodeSelect">
+    <option value="">-- Pilih --</option>
+    <option value="A">MASLAMAH (A)</option>
+    <option value="B">ABDULLAH (B)</option>
+    <option value="C">SHIDIQ (C)</option>
+    <option value="D">MUSTHOFA (D)</option>
+  </select>
+  <button id="showNodeBtn">Tampilkan</button>
+  <button id="showAllBtn">Tampilkan Semua</button>
+</div>
+
+<!-- Tree -->
+<div id="treeContainer">
+  <div id="tree"></div>
+</div>
+
+<!-- Admin Panel -->
+<div id="adminPanel">
+  <h3>Tambah Anggota</h3>
+  <form id="addForm">
+    <input type="text" id="newName" placeholder="Nama" required>
+    <input type="text" id="newNo" placeholder="Nomor">
+    <input type="text" id="newAlamat" placeholder="Alamat">
+    <input type="text" id="newWA" placeholder="WA">
+    <input type="text" id="newFoto" placeholder="URL Foto">
+    <input type="text" id="parentNo" placeholder="Nomor induk">
+    <button type="submit">Tambah</button>
+  </form>
+  <h4>Ganti Password</h4>
+  <input type="password" id="newPassword" placeholder="Password baru">
+  <button id="changePwBtn">Ganti</button>
+  <p id="pwMsg" style="color:green; display:none;">Password berhasil diubah!</p>
+</div>
+
+<!-- Info Modal -->
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <img id="modalPhoto" src="" alt="Foto Anggota">
+    <h2 id="modalName"></h2>
+    <p id="modalInfo"></p>
+    <p id="modalAlamat"></p>
+    <p><a id="modalWA" href="" target="_blank">📱 Chat WhatsApp</a></p>
+  </div>
+</div>
+
+<script>
+// --- Passwords & localStorage ---
+let adminPass = localStorage.getItem('adminPass') || 'admin123';
+let anggotaPass = JSON.parse(localStorage.getItem('anggotaPass')) || {};
+
+// --- Data awal ---
+let data = JSON.parse(localStorage.getItem('silsilahData')) || [
+  {no:"A", nama:"MASLAMAH", alamat:"Kediri", wa:"+628111111111", foto:"https://via.placeholder.com/150", anak:[
+    {no:"A.1", nama:"HASYM", alamat:"Kediri", wa:"+628111111112", foto:"https://via.placeholder.com/150", anak:[]},
+    {no:"A.2", nama:"BAKRI", alamat:"Kediri", wa:"+628111111113", foto:"https://via.placeholder.com/150", anak:[]},
+    {no:"A.3", nama:"MASRI'AH", alamat:"Kediri", wa:"+628111111114", foto:"https://via.placeholder.com/150", anak:[]}
+  ]},
+  {no:"B", nama:"ABDULLAH", alamat:"Kediri", wa:"+628222222222", foto:"https://via.placeholder.com/150", anak:[]},
+  {no:"C", nama:"SHIDIQ", alamat:"Kediri", wa:"+628333333333", foto:"https://via.placeholder.com/150", anak:[]},
+  {no:"D", nama:"MUSTHOFA", alamat:"Kediri", wa:"+628444444444", foto:"https://via.placeholder.com/150", anak:[]}
+];
+
+// --- Login ---
+const loginType = document.getElementById('loginType');
+const memberNoInput = document.getElementById('memberNo');
+const loginBtn = document.getElementById('loginBtn');
+const loginError = document.getElementById('loginError');
+const adminPanel = document.getElementById('adminPanel');
+const treeContainer = document.getElementById('treeContainer');
+const loginContainer = document.getElementById('loginContainer');
+const nodeSelectContainer = document.getElementById('nodeSelectContainer');
+const showNodeBtn = document.getElementById('showNodeBtn');
+const showNodeSelect = document.getElementById('showNodeSelect');
+const showAllBtn = document.getElementById('showAllBtn');
+
+loginType.addEventListener('change', ()=>{ memberNoInput.style.display = loginType.value==='anggota'?'inline-block':'none'; });
+
+loginBtn.onclick = ()=>{
+  const type = loginType.value;
+  const pw = document.getElementById('loginPassword').value;
+  const no = memberNoInput.value;
+  loginError.style.display='none';
+
+  if(type==='admin' && pw===adminPass){
+    loginContainer.style.display='none';
+    adminPanel.style.display='block';
+    treeContainer.style.display='block';
+    nodeSelectContainer.style.display='none';
+    renderTree();
+  } else if(type==='anggota' && no && anggotaPass[no] && pw===anggotaPass[no]){
+    loginContainer.style.display='none';
+    adminPanel.style.display='none';
+    treeContainer.style.display='block';
+    nodeSelectContainer.style.display='block';
+    renderTree();
+    showNodeSelect.value = no.includes('.')?no.split('.')[0]:no;
+  } else loginError.style.display='block';
+};
+
+// --- Tampilkan node dipilih anggota ---
+showNodeBtn.onclick = ()=>{
+  const selected = showNodeSelect.value;
+  if(selected) renderTree(selected);
+};
+
+// --- Tampilkan semua kembali ---
+showAllBtn.onclick = ()=>{
+  renderTree();
+  showNodeSelect.value='';
+};
+
+// --- Modal ---
+const modal=document.getElementById('modal');
+const modalName=document.getElementById('modalName');
+const modalInfo=document.getElementById('modalInfo');
+const modalAlamat=document.getElementById('modalAlamat');
+const modalWA=document.getElementById('modalWA');
+const modalPhoto=document.getElementById('modalPhoto');
+const closeBtn=document.querySelector(".close");
+
+function showModal(node){
+  modal.style.display='block';
+  modalName.textContent=node.nama;
+  modalInfo.textContent=`Nomor: ${node.no}`;
+  modalAlamat.textContent=`Alamat: ${node.alamat}`;
+  modalWA.href=`https://wa.me/${node.wa.replace(/\D/g,'')}`;
+  modalPhoto.src=node.foto;
+}
+
+closeBtn.onclick = ()=>modal.style.display='none';
+window.onclick = e=>{if(e.target==modal) modal.style.display='none';};
+
+// --- Build & render tree ---
+function buildTree(nodes, filter=null){
+  const ul=document.createElement('ul');
+  nodes.forEach(n=>{
+    if(filter && !n.no.startsWith(filter)) return;
+    const li=document.createElement('li');
+    const span=document.createElement('span');
+    span.classList.add('node');
+    span.textContent=`${n.no} ${n.nama}`;
+    span.onclick = ()=>toggleChildren(li);
+    li.appendChild(span);
+
+    const infoBtn = document.createElement('button');
+    infoBtn.textContent='ℹ️ Info';
+    infoBtn.onclick=(e)=>{ e.stopPropagation(); showModal(n); };
+    li.appendChild(infoBtn);
+
+    if(adminPanel.style.display==='block'){
+      const delBtn=document.createElement('button');
+      delBtn.textContent='Hapus';
+      delBtn.onclick=(e)=>{ e.stopPropagation(); deleteNode(n.no); };
+      li.appendChild(delBtn);
+    }
+
+    if(n.anak.length>0){
+      const childUl = buildTree(n.anak, filter);
+      childUl.classList.add('hidden');
+      li.appendChild(childUl);
+    }
+    ul.appendChild(li);
+  });
+  return ul;
+}
+
+function toggleChildren(li){
+  const ul = li.querySelector('ul');
+  if(ul) ul.classList.toggle('hidden');
+}
+
+function renderTree(filter=null){
+  const treeDiv = document.getElementById('tree');
+  treeDiv.innerHTML='';
+  treeDiv.appendChild(buildTree(data, filter));
+}
+
+// --- Tambah anggota ---
+document.getElementById('addForm').onsubmit=(e)=>{
+  e.preventDefault();
+  const newMember = {
+    no: document.getElementById('newNo').value,
+    nama: document.getElementById('newName').value,
+    alamat: document.getElementById('newAlamat').value,
+    wa: document.getElementById('newWA').value,
+    foto: document.getElementById('newFoto').value||'https://via.placeholder.com/150',
+    anak:[]
+  };
+  const parentNo = document.getElementById('parentNo').value;
+  function findNode(nodes,no){
+    for(let n of nodes){
+      if(n.no===no) return n;
+      const res=findNode(n.anak,no);
+      if(res) return res;
+    }
+    return null;
+  }
+  if(parentNo==='') data.push(newMember);
+  else{
+    const parent=findNode(data,parentNo);
+    if(parent) parent.anak.push(newMember);
+  }
+  localStorage.setItem('silsilahData', JSON.stringify(data));
+  anggotaPass[newMember.no]='123';
+  localStorage.setItem('anggotaPass', JSON.stringify(anggotaPass));
+  renderTree();
+  document.getElementById('addForm').reset();
+};
+
+// --- Delete node ---
+function deleteNode(no){
+  function remove(nodes,no){
+    return nodes.filter(n=>{
+      if(n.no===no) return false;
+      n.anak=remove(n.anak,no);
+      return true;
+    });
+  }
+  data = remove(data,no);
+  localStorage.setItem('silsilahData', JSON.stringify(data));
+  delete anggotaPass[no];
+  localStorage.setItem('anggotaPass', JSON.stringify(anggotaPass));
+  renderTree();
+}
+
+// --- Ganti password admin ---
+document.getElementById('changePwBtn').onclick=()=>{
+  const newPw=document.getElementById('newPassword').value;
+  if(newPw){
+    adminPass=newPw;
+    localStorage.setItem('adminPass', adminPass);
+    document.getElementById('pwMsg').style.display='block';
+    setTimeout(()=>document.getElementById('pwMsg').style.display='none',3000);
+    document.getElementById('newPassword').value='';
+  }
+};
+</script>
+</body>
+</html>
